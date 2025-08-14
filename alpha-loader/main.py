@@ -1,5 +1,18 @@
 import requests
 import os
+from psycopg2 import connect
+from psycopg2.extensions import connection as PGConnection
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
+
+DB_USER = os.environ["DB_USER"]
+DB_PASSWORD = os.environ["DB_PASSWORD"]
+DB_HOST = os.environ["DB_HOST"]
+DB_PORT = os.environ["DB_PORT"]
+DB_NAME = os.environ["DB_NAME"]
 
 CATEGORIES_PATH = "temp/categories.csv"
 COLORS_PATH = "temp/colors.csv"
@@ -45,6 +58,17 @@ URL_TO_PATH_MAPPING = (
 )
 
 
+def create_db():
+    conn = connect(
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        host=DB_HOST,
+        port=DB_PORT
+    )
+    return conn
+
+
 def check_is_dataset_extracted() -> bool:
     return all([os.path.isfile(path) for path in DATASETS_PATHS])
 
@@ -61,14 +85,23 @@ def extract_datasets_if_missing():
         extract_alpha_dataset()
 
 
-async def loading():
-    pass
+def load_sizes(conn: PGConnection):
+    with conn.cursor() as cursor:
+        with open(SIZES_PATH, "r", encoding="utf-8") as f:
+            # Skip the header row
+            next(f)
+            cursor.copy_from(f, "sizes", sep=",", columns=("id", "label"))
+    conn.commit()
+
+
+def loading(conn: PGConnection):
+    load_sizes(conn)
 
 
 def main():
-    import asyncio
     extract_datasets_if_missing()
-    asyncio.run(loading())
+    conn = create_db()
+    loading(conn)
 
 
 if __name__ == "__main__":
